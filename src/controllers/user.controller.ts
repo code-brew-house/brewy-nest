@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   ParseIntPipe,
+  Request,
 } from '@nestjs/common';
 import { UserService } from '../services/user.service';
 import { UserEntity } from '../entities/user.entity';
@@ -16,14 +17,21 @@ import { User } from '../interfaces/user.interface';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Post()
-  async create(@Body() userData: Partial<User>): Promise<UserEntity> {
-    return await this.userService.create(userData);
+  @Get('me')
+  async authenticatedUser(@Request() req): Promise<UserEntity> {
+    // For now, we'll use a simple approach. In a real app, you'd use JWT or session auth
+    // This assumes the user is authenticated and user info is in req.user
+    return req.user;
   }
 
   @Get()
-  async findAll(): Promise<UserEntity[]> {
-    return await this.userService.findAll();
+  async allUsers(): Promise<UserEntity[]> {
+    return await this.userService.allUsers();
+  }
+
+  @Post()
+  async create(@Body() userData: Partial<User>): Promise<UserEntity> {
+    return await this.userService.create(userData);
   }
 
   @Get(':id')
@@ -31,16 +39,16 @@ export class UserController {
     return await this.userService.findById(id);
   }
 
+  @Get('email/:email')
+  async findByEmail(@Param('email') email: string): Promise<UserEntity> {
+    return await this.userService.findByEmail(email);
+  }
+
   @Get('username/:username')
   async findByUsername(
     @Param('username') username: string,
   ): Promise<UserEntity> {
     return await this.userService.findByUsername(username);
-  }
-
-  @Get('email/:email')
-  async findByEmail(@Param('email') email: string): Promise<UserEntity> {
-    return await this.userService.findByEmail(email);
   }
 
   @Put(':id')

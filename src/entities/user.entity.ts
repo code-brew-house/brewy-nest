@@ -1,10 +1,10 @@
 import { Entity, PrimaryGeneratedColumn, Column, Unique } from 'typeorm';
-import { User } from '../interfaces/user.interface';
+import { User as UserInterface } from '../interfaces/user.interface';
 
 @Entity('users')
-@Unique(['username'])
 @Unique(['email'])
-export class UserEntity implements User {
+@Unique(['username'])
+export class UserEntity implements UserInterface {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -12,10 +12,16 @@ export class UserEntity implements User {
   username: string;
 
   @Column({ nullable: false })
-  password: string;
+  firstName: string;
+
+  @Column({ nullable: false })
+  lastName: string;
 
   @Column({ unique: true, nullable: false })
   email: string;
+
+  @Column({ nullable: false })
+  password: string;
 
   // UserDetails interface properties
   authorities?: any[];
