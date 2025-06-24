@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { AudioInfo, AudioProcessingException } from './audioProcessing.service';
+import { AnthropicConfig } from '../config/anthropic.config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface TonalityResult {
   dominantTone: string;
@@ -15,22 +19,30 @@ export interface TonalityResult {
 export class AnthropicService {
   private tonalityAnalysisPrompt: string;
   private anthropic: Anthropic;
+  private config: AnthropicConfig;
 
-  constructor() {
+  constructor(private configService: ConfigService) {
+    // Get configuration
+    this.config = this.configService.get<AnthropicConfig>('anthropic');
+
     // Initialize Anthropic client
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    if (!this.config.apiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
-    this.anthropic = new Anthropic({ apiKey });
+    this.anthropic = new Anthropic({
+      apiKey: this.config.apiKey,
+      maxRetries: this.config.maxRetries,
+    });
 
-    // Load the prompt from the resources folder
+    // Load the prompt from the prompts folder
     try {
-      // In NestJS, we'll use a different approach to load resources
-      // For now, we'll use a default prompt
-      this.tonalityAnalysisPrompt = this.getDefaultPrompt();
+      this.tonalityAnalysisPrompt = this.loadPromptFromFile('default.txt');
     } catch (error) {
       // Fall back to a default prompt if the file can't be loaded
+      console.warn(
+        'Failed to load prompt from file, using default:',
+        error.message,
+      );
       this.tonalityAnalysisPrompt = this.getDefaultPrompt();
     }
   }
@@ -89,10 +101,30 @@ Base64 audio content: ${audioInfo.base64Content}`;
    * This replaces the Java TonalityProvider.getTonality() method
    */
   private getTonality(clientId: string): string {
-    // You can implement different prompts based on clientId
-    // For now, return the default prompt
-    console.log(`Using tonality prompt for client: ${clientId}`);
-    return this.tonalityAnalysisPrompt;
+    try {
+      // Try to load client-specific prompt
+      const promptFileName = `clientId${clientId}.txt`;
+      return this.loadPromptFromFile(promptFileName);
+    } catch (error) {
+      // Fall back to default prompt if client-specific prompt doesn't exist
+      console.log(
+        `No specific prompt found for client ${clientId}, using default`,
+      );
+      return this.tonalityAnalysisPrompt;
+    }
+  }
+
+  /**
+   * Load prompt from file in the prompts directory
+   */
+  private loadPromptFromFile(fileName: string): string {
+    const filePath = path.join(this.config.promptsBasePath, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Prompt file not found: ${filePath}`);
+    }
+
+    return fs.readFileSync(filePath, 'utf-8').trim();
   }
 
   /**
@@ -115,8 +147,9 @@ The response should be valid JSON only, without any additional text.`;
   ): Promise<string> {
     try {
       const message = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 1000,
+        model: this.config.model,
+        max_tokens: this.config.maxTokens,
+        temperature: this.config.temperature,
         messages: [
           {
             role: 'user',
